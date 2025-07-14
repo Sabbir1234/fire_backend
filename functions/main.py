@@ -1,21 +1,31 @@
-# Welcome to Cloud Functions for Firebase for Python!
-# To get started, simply uncomment the below code or create your own.
-# Deploy with `firebase deploy`
+import functions_framework
+import replicate
+import os
+from flask import Request, jsonify
 
-from firebase_functions import https_fn
-from firebase_functions.options import set_global_options
-from firebase_admin import initialize_app
+replicate_client = replicate.Client(api_token=os.getenv("REPLICATE_API_TOKEN"))
 
-# For cost control, you can set the maximum number of containers that can be
-# running at the same time. This helps mitigate the impact of unexpected
-# traffic spikes by instead downgrading performance. This limit is a per-function
-# limit. You can override the limit for each function using the max_instances
-# parameter in the decorator, e.g. @https_fn.on_request(max_instances=5).
-set_global_options(max_instances=10)
+@functions_framework.http
+def generate_image(request: Request):
+    request_json = request.get_json()
 
-# initialize_app()
-#
-#
-# @https_fn.on_request()
-# def on_request_example(req: https_fn.Request) -> https_fn.Response:
-#     return https_fn.Response("Hello world!")
+    input_image = request_json.get("input_image")
+    iconic_location = request_json.get("iconic_location")
+
+    if not input_image or not iconic_location:
+        return jsonify({"error": "Missing input_image or iconic_location"}), 400
+
+    try:
+        output = replicate_client.run(
+            "flux-kontext-apps/iconic-locations:6ab67e15971723f0ec7767cc8c5178c5a97382fa7ea2f9e445ea16094391b504",
+            input={
+                "input_image": input_image,
+                "iconic_location": iconic_location
+            }
+        )
+        # If output is a list, return the first item
+        if isinstance(output, list):
+            output = output[0]
+        return jsonify({"image_url": output})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
